@@ -163,9 +163,14 @@ class SyntheticVisionUI:
 
         exts = ('.png','.jpg','.jpeg','.bmp','.gif')
         self.generated_images = [os.path.join(self.gan_folder,f)
-                                 for f in os.listdir(self.gan_folder)
-                                 if f.lower().endswith(exts)]
+                                for f in os.listdir(self.gan_folder)
+                                if f.lower().endswith(exts)]
         self.generated_images.sort()
+        
+        if not self.generated_images:
+            messagebox.showwarning("Warning", "No GAN images found in folder!")
+            return
+
         self.display_generated_images()
         self.evaluate_gan_images()
 
@@ -201,34 +206,22 @@ class SyntheticVisionUI:
         if not self.generated_images:
             return
 
-        true_labels = []
-        pred_labels = []
+        class_counts = {flower: 0 for flower in self.flower_types}
 
         for img_path in self.generated_images:
-            label_name = os.path.basename(img_path).split('_')[0]
-            true_labels.append(self.flower_types.index(label_name)
-                               if label_name in self.flower_types else 0)
             img = Image.open(img_path).convert("RGB")
             input_tensor = self.transform(img).unsqueeze(0).to(self.device)
             with torch.no_grad():
                 output = self.classifier(input_tensor)
-                pred = torch.argmax(F.softmax(output,dim=1),dim=1).item()
-                pred_labels.append(pred)
+                pred = torch.argmax(output, dim=1).item()
+                class_counts[self.flower_types[pred]] += 1
 
-        # Metrics
-        acc = accuracy_score(true_labels, pred_labels)
-        prec = precision_score(true_labels, pred_labels, average='macro', zero_division=0)
-        rec = recall_score(true_labels, pred_labels, average='macro', zero_division=0)
-        f1 = f1_score(true_labels, pred_labels, average='macro', zero_division=0)
-        cm = confusion_matrix(true_labels, pred_labels)
+        # Display class counts
+        self.metrics_text.delete("1.0", tk.END)
+        self.metrics_text.insert(tk.END, "Predicted Class Distribution:\n")
+        for flower, count in class_counts.items():
+            self.metrics_text.insert(tk.END, f"{flower}: {count}\n")
 
-        # Display metrics
-        self.metrics_text.delete("1.0",tk.END)
-        self.metrics_text.insert(tk.END,f"Accuracy: {acc:.3f}\n")
-        self.metrics_text.insert(tk.END,f"Precision: {prec:.3f}\n")
-        self.metrics_text.insert(tk.END,f"Recall: {rec:.3f}\n")
-        self.metrics_text.insert(tk.END,f"F1-score: {f1:.3f}\n")
-        self.metrics_text.insert(tk.END,f"Confusion Matrix:\n{cm}\n")
 
 if __name__ == "__main__":
     root = tk.Tk()
